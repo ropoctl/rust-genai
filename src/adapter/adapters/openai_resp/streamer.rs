@@ -151,6 +151,11 @@ impl futures::Stream for OpenAIRespStreamer {
 								};
 
 								self.in_progress_tool_calls.insert(output_index, tool_call);
+							} else if item.x_get_str("type").ok() == Some("reasoning") {
+								if let Ok(ec) = item.x_get_str("encrypted_content") {
+									let sigs = self.captured_data.thought_signatures.get_or_insert_with(Vec::new);
+									sigs.push(ec.to_string());
+								}
 							}
 							continue;
 						}
@@ -227,7 +232,7 @@ impl futures::Stream for OpenAIRespStreamer {
 								captured_text_content: self.captured_data.content.take(),
 								captured_reasoning_content: self.captured_data.reasoning_content.take(),
 								captured_tool_calls: self.captured_data.tool_calls.take(),
-								captured_thought_signatures: None,
+								captured_thought_signatures: self.captured_data.thought_signatures.take(),
 								captured_response_id: Some(response.id),
 							};
 
@@ -260,7 +265,7 @@ impl futures::Stream for OpenAIRespStreamer {
 								captured_text_content: self.captured_data.content.take(),
 								captured_reasoning_content: self.captured_data.reasoning_content.take(),
 								captured_tool_calls: self.captured_data.tool_calls.take(),
-								captured_thought_signatures: None,
+								captured_thought_signatures: self.captured_data.thought_signatures.take(),
 								captured_response_id: Some(resp_id),
 							};
 
@@ -289,7 +294,7 @@ impl futures::Stream for OpenAIRespStreamer {
 							captured_text_content: self.captured_data.content.take(),
 							captured_reasoning_content: self.captured_data.reasoning_content.take(),
 							captured_tool_calls: self.captured_data.tool_calls.take(),
-							captured_thought_signatures: None,
+							captured_thought_signatures: self.captured_data.thought_signatures.take(),
 							captured_response_id: None,
 						};
 						return Poll::Ready(Some(Ok(InterStreamEvent::End(inter_stream_end))));
