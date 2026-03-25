@@ -93,3 +93,42 @@ async fn test_yakbak_openai_resp_stream_tools() -> TestResult<()> {
 
 	Ok(())
 }
+
+/// RED TEST: Demonstrates the UTF-8 chunking bug in WebStream::poll_next().
+///
+/// When a multi-byte UTF-8 character (e.g. Japanese 日 = 3 bytes) straddles an HTTP
+/// chunk boundary, `String::from_utf8()` fails with "incomplete utf-8 byte sequence".
+///
+/// This tape has Japanese text positioned at byte offset 8191 (8KB boundary).
+/// If reqwest delivers bytes in 8KB chunks, the 3-byte character gets split and
+/// the stream fatally errors.
+///
+/// See: https://github.com/jeremychone/rust-genai/issues/XXX
+#[tokio::test]
+async fn test_yakbak_openai_resp_utf8_chunking_bug() -> TestResult<()> {
+	let (client, _server) = replay_client("openai_resp", "utf8_chunking_bug").await?;
+
+	let chat_req = ChatRequest::new(vec![
+		ChatMessage::user("Say something in Japanese."),
+	]);
+	let options = ChatOptions::default()
+		.with_capture_content(true)
+		.with_capture_usage(true);
+
+	let stream_res = client
+		.exec_chat_stream("openai_resp::o3-mini", chat_req, Some(&options))
+		.await?;
+	let extract = extract_stream_end(stream_res.stream).await?;
+
+	// The content should contain Japanese characters intact
+	let content = extract.content.ok_or("Should have streamed content")?;
+	assert!(content.contains("日本語のテスト"), "Content should contain Japanese text, got: {}...", &content[content.len().saturating_sub(100)..]);
+
+	// Usage should be captured
+	let usage = extract.stream_end.captured_usage.as_ref().ok_or("Should have usage")?;
+	assert_eq!(usage.prompt_tokens, Some(10));
+	assert_eq!(usage.completion_tokens, Some(50));
+	assert_eq!(usage.total_tokens, Some(60));
+
+	Ok(())
+}
