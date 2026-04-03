@@ -15,11 +15,13 @@ async fn test_yakbak_openai_resp_reasoning_stream() -> TestResult<()> {
 	let (client, _server) = replay_client("openai_resp", "reasoning_stream").await?;
 
 	let chat_req = ChatRequest::new(vec![
-		ChatMessage::system("Answer in one sentence."),
-		ChatMessage::user("Why is the sky blue?"),
+		ChatMessage::system("Think carefully, then answer concisely in at most two sentences."),
+		ChatMessage::user(
+			"A fair coin is tossed repeatedly until either HHT or THH appears. Which pattern is more likely to appear first, and what is the probability?",
+		),
 	]);
 	let options = ChatOptions::default()
-		.with_reasoning_effort(ReasoningEffort::Low)
+		.with_reasoning_effort(ReasoningEffort::Medium)
 		.with_capture_content(true)
 		.with_capture_reasoning_content(true)
 		.with_capture_usage(true);
@@ -32,19 +34,25 @@ async fn test_yakbak_openai_resp_reasoning_stream() -> TestResult<()> {
 	// Exact text content
 	assert_eq!(
 		extract.content.as_deref(),
-		Some(
-			"The sky looks blue because molecules in Earth\u{2019}s atmosphere scatter shorter blue wavelengths of sunlight more strongly than longer red wavelengths, sending more blue light to our eyes."
-		),
+		Some("**THH** is more likely to appear first. In fact, \\(P(\\text{HHT first}) = \\tfrac14\\) and \\(P(\\text{THH first}) = \\tfrac34\\)."),
 		"Text should match recorded response exactly"
 	);
 
-	// Exact usage
-	let usage = extract.stream_end.captured_usage.as_ref().ok_or("Should have usage")?;
-	assert_eq!(usage.prompt_tokens, Some(21));
-	assert_eq!(usage.completion_tokens, Some(45));
-	assert_eq!(usage.total_tokens, Some(66));
+	let reasoning = extract.reasoning_content.ok_or("Should have streamed reasoning summary content")?;
+	assert!(
+		reasoning.contains("**Considering toss sequences**"),
+		"Should include the first streamed reasoning summary section"
+	);
+	assert!(
+		reasoning.contains("**Cross-checking Penney's game**"),
+		"Should include the later streamed reasoning summary section"
+	);
 
-	// Encrypted reasoning content should be captured as thought signatures
+	let usage = extract.stream_end.captured_usage.as_ref().ok_or("Should have usage")?;
+	assert_eq!(usage.prompt_tokens, Some(54));
+	assert_eq!(usage.completion_tokens, Some(1262));
+	assert_eq!(usage.total_tokens, Some(1316));
+
 	let thought_sigs = extract
 		.stream_end
 		.captured_thought_signatures()

@@ -41,11 +41,13 @@ async fn record_openai_resp_reasoning_stream() -> TestResult<()> {
 	let (client, mut server) = record_client("openai_resp", "reasoning_stream", &openai_backend()).await?;
 
 	let chat_req = ChatRequest::new(vec![
-		ChatMessage::system("Answer in one sentence."),
-		ChatMessage::user("Why is the sky blue?"),
+		ChatMessage::system("Think carefully, then answer concisely in at most two sentences."),
+		ChatMessage::user(
+			"A fair coin is tossed repeatedly until either HHT or THH appears. Which pattern is more likely to appear first, and what is the probability?",
+		),
 	]);
 	let options = ChatOptions::default()
-		.with_reasoning_effort(ReasoningEffort::Low)
+		.with_reasoning_effort(ReasoningEffort::Medium)
 		.with_capture_content(true)
 		.with_capture_reasoning_content(true);
 
@@ -53,11 +55,11 @@ async fn record_openai_resp_reasoning_stream() -> TestResult<()> {
 	let extract = extract_stream_end(stream_res.stream).await?;
 	eprintln!(
 		"[record] Stream content: {:?}",
-		extract.content.as_deref().map(|s| &s[..s.len().min(80)])
+		extract.content.as_deref().map(|s| &s[..s.len().min(120)])
 	);
 	eprintln!(
 		"[record] Stream reasoning: {:?}",
-		extract.reasoning_content.as_deref().map(|s| &s[..s.len().min(80)])
+		extract.reasoning_content.as_deref().map(|s| &s[..s.len().min(120)])
 	);
 
 	server.shutdown().await;
