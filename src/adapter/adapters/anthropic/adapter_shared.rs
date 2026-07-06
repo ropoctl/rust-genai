@@ -112,6 +112,7 @@ impl AnthropicAdapter {
 	pub(in crate::adapter::adapters) fn into_anthropic_request_parts(
 		mut chat_req: ChatRequest,
 		request_cache_control: Option<CacheControl>,
+		preserve_system_messages: bool,
 	) -> Result<AnthropicRequestParts> {
 		let mut messages: Vec<Value> = Vec::new();
 		// (content, cache_control)
@@ -159,7 +160,23 @@ impl AnthropicAdapter {
 			match msg.role {
 				// Collect only text for system; other content parts are ignored by Anthropic here.
 				ChatRole::System => {
-					if let Some(system_text) = msg.content.joined_texts() {
+					if preserve_system_messages {
+						if msg.content.is_text_only() && cache_control.is_none() {
+							let text = msg.content.joined_texts().unwrap_or_else(String::new);
+							messages.push(json!({"role": "system", "content": text}));
+						} else {
+							let mut values: Vec<Value> = Vec::new();
+							for part in msg.content {
+								match part {
+									ContentPart::Text(text) => values.push(json!({"type": "text", "text": text})),
+									ContentPart::Custom(custom_part) => values.push(custom_part.data),
+									_ => {}
+								}
+							}
+							let values = apply_cache_control_to_parts(cache_control.as_ref(), values);
+							messages.push(json!({"role": "system", "content": values}));
+						}
+					} else if let Some(system_text) = msg.content.joined_texts() {
 						systems.push((system_text, cache_control));
 					}
 				}
@@ -412,12 +429,18 @@ impl AnthropicAdapter {
 			headers.merge_with(extra_headers);
 		}
 
+		let (preserve_system_messages, extra_body) = anthropic_extra_body(options_set.extra_body());
+
 		// -- Parts
 		let AnthropicRequestParts {
 			system,
 			messages,
 			tools,
-		} = Self::into_anthropic_request_parts(chat_req, options_set.cache_control().cloned())?;
+		} = Self::into_anthropic_request_parts(
+			chat_req,
+			options_set.cache_control().cloned(),
+			preserve_system_messages,
+		)?;
 
 		// -- Extract Model Name and Reasoning
 		let (_, raw_model_name) = model.model_name.namespace_and_name();
@@ -512,8 +535,8 @@ impl AnthropicAdapter {
 			payload.x_insert("top_p", top_p)?;
 		}
 
-		if let Some(extra_body) = options_set.extra_body() {
-			payload.x_merge(extra_body.clone())?;
+		if let Some(extra_body) = extra_body {
+			payload.x_merge(extra_body)?;
 		}
 
 		Ok(WebRequestData { url, headers, payload })
@@ -891,6 +914,26 @@ fn cache_control_to_json(cache_control: &CacheControl) -> Value {
 			json!({"type": "ephemeral", "ttl": "1h"})
 		}
 	}
+}
+
+fn anthropic_extra_body(extra_body: Option<&Value>) -> (bool, Option<Value>) {
+	let Some(extra_body) = extra_body else {
+		return (false, None);
+	};
+
+	let mut extra_body = extra_body.clone();
+	let preserve_system_messages = extra_body
+		.as_object_mut()
+		.and_then(|obj| obj.remove("anthropic_preserve_system_messages"))
+		.and_then(|value| value.as_bool())
+		.unwrap_or(false);
+
+	let extra_body = match extra_body {
+		Value::Object(ref obj) if obj.is_empty() => None,
+		other => Some(other),
+	};
+
+	(preserve_system_messages, extra_body)
 }
 
 /// Parse cache_creation breakdown from Anthropic API response.
