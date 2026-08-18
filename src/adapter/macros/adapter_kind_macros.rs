@@ -1,5 +1,6 @@
-/// Generates the three 1:1 string-mapping methods (`as_str`, `as_lower_str`,
-/// `from_lower_str`) from a single canonical table of `Variant => "Name", "lower"`.
+/// Generates the 1:1 string-mapping methods (`as_str`, `as_lower_str`,
+/// `from_lower_str`) and the variant list (`all`) from a single canonical
+/// table of `Variant => "Name", "lower"`.
 ///
 /// This keeps the three tables impossible to desync (the same `"lower"` literal
 /// drives both `as_lower_str` and `from_lower_str`), and reduces adding a new
@@ -35,6 +36,22 @@ macro_rules! adapter_kind_str_maps {
 					AdapterKind::BedrockSigv4 => "bedrock_sigv4",
 					AdapterKind::Custom(_) => "custom",
 				}
+			}
+
+			/// All built-in adapter kinds, in table order.
+			///
+			/// `Custom(_)` is excluded: it is parameterized by an index
+			/// rather than a fixed variant, so it cannot be enumerated.
+			///
+			/// Useful for building a provider list at runtime — validating
+			/// configuration against the known set, or offering a choice —
+			/// which `from_lower_str` alone cannot do.
+			pub fn all() -> &'static [AdapterKind] {
+				&[
+					$( AdapterKind::$variant, )*
+					#[cfg(feature = "bedrock-sigv4")]
+					AdapterKind::BedrockSigv4,
+				]
 			}
 
 			pub fn from_lower_str(name: &str) -> Option<Self> {
