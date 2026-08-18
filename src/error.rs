@@ -229,7 +229,7 @@ mod tests {
 
 	fn webc_status_error(status: u16) -> webc::Error {
 		webc::Error::ResponseFailedStatus {
-			status: StatusCode::from_u16(status).unwrap(),
+			status: StatusCode::from_u16(status).expect("valid status code"),
 			body: "body".to_string(),
 			headers: Box::new(HeaderMap::new()),
 		}
