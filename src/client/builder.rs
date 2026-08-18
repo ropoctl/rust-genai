@@ -1,7 +1,7 @@
 use crate::adapter::AdapterKind;
 use crate::chat::ChatOptions;
 use crate::resolver::{
-	AuthResolver, IntoAuthResolverFn, IntoModelMapperFn, IntoServiceTargetResolverFn, ModelMapper,
+	AuthResolver, IntoAuthResolverFn, IntoModelMapperFn, IntoServiceTargetResolverFn, ModelMapper, ProviderConfig,
 	ServiceTargetResolver,
 };
 use crate::webc::WebClient;
@@ -103,6 +103,12 @@ impl ClientBuilder {
 	/// adapter is already physically single-provider; this makes that
 	/// constraint explicit and drives routing directly instead of inferring
 	/// the adapter from the model name on every call.
+	pub fn with_adapter_kind(mut self, adapter_kind: AdapterKind) -> Self {
+		let client_config = self.config.get_or_insert_with(ClientConfig::default);
+		client_config.adapter_kind = Some(adapter_kind);
+		self
+	}
+
 	/// Sets the endpoint and/or auth for one adapter kind.
 	///
 	/// Repeatable — call once per provider this Client should reach:
@@ -125,16 +131,10 @@ impl ClientBuilder {
 	pub fn with_provider_config(
 		mut self,
 		adapter_kind: AdapterKind,
-		provider_config: impl Into<crate::resolver::ProviderConfig>,
+		provider_config: impl Into<ProviderConfig>,
 	) -> Self {
 		let config = self.config.take().unwrap_or_default();
 		self.config = Some(config.with_provider_config(adapter_kind, provider_config));
-		self
-	}
-
-	pub fn with_adapter_kind(mut self, adapter_kind: AdapterKind) -> Self {
-		let client_config = self.config.get_or_insert_with(ClientConfig::default);
-		client_config.adapter_kind = Some(adapter_kind);
 		self
 	}
 }
