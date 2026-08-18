@@ -2,9 +2,10 @@
 /// `from_lower_str`) and the variant list (`all`) from a single canonical
 /// table of `Variant => "Name", "lower"`.
 ///
-/// This keeps the three tables impossible to desync (the same `"lower"` literal
-/// drives both `as_lower_str` and `from_lower_str`), and reduces adding a new
-/// adapter to a single line in the table below.
+/// This keeps them impossible to desync (the same `"lower"` literal drives
+/// both `as_lower_str` and `from_lower_str`, and the same variant drives
+/// `all`), and reduces adding a new adapter to a single line in the table
+/// below.
 ///
 /// NOTE: `Custom(_)` and the `genai_` parsing are handled inside the macro since
 ///       they are constant across all variants. The cfg-gated `BedrockSigv4` is
